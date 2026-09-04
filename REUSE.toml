@@ -1,0 +1,38 @@
+version = 1
+
+# 1. Main copyrightable material (Source Code)
+[[annotations]]
+path = "src/**/*.rs"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Raphaël Doursenaud <raphael@doursenaud.fr>"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# 2. Other copyrightable creative material (Documentation, icons, images…)
+[[annotations]]
+path = [
+    "README.md",
+    "resources/icon.svg",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Raphaël Doursenaud <raphael@doursenaud.fr>"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# 3. Non-copyrightable material (Config files, data, facts…)
+[[annotations]]
+path = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs",
+    "justfile",
+    "rustfmt.toml",
+    "i18n.toml",
+    "i18n/**/*.ftl",
+    "resources/app.desktop",
+    "resources/app.metainfo.xml",
+    ".gitignore",
+    ".idea/**/*",
+    ".zed/**/*"
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Non-copyrightable: Public Domain"
+SPDX-License-Identifier = "CC0-1.0"
