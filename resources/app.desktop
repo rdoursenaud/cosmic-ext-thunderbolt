@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Cosmic Ext Thunderbolt
+Comment=A Thunderbolt™ applet for the COSMIC™ desktop
+Type=Application
+Icon=fr.doursenaud.raphael.cosmic-ext-thunderbolt
+Exec=cosmic-ext-thunderbolt %F
+Terminal=false
+StartupNotify=true
+Categories=COSMIC
+Keywords=COSMIC
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+MimeType=
