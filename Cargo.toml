@@ -6,13 +6,25 @@ license = "GPL-3.0-only"
 description = "A Thunderbolt™ applet for the COSMIC™ desktop"
 repository = "https://github.com/rdoursenaud/cosmic-ext-thunderbolt"
 
+[features]
+mock = []
+
 [build-dependencies]
 xdgen = "0.1"
 
 [dependencies]
+async-stream = "0.3.6"
+const_format = "0.2.36"
+futures = "0.3.34"
 i18n-embed-fl = "0.10"
 rust-embed = "8.11"
+serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.0", features = ["full"] }
+tracing = "0.1.44"
+tracing-log = "0.2.0"
+tracing-subscriber = "0.3.23"
+zbus = { version = "5.14.0", default-features = false, features = ["tokio"] }
+zvariant = "5.14.0"  # Keep in sync with zbus version
 
 [dependencies.i18n-embed]
 version = "0.16"
@@ -34,6 +46,7 @@ features = [
     # Add Wayland support to winit
     "wayland",
     # Windowing support for X11, Windows, Mac, & Redox
+    "desktop-systemd-scope",
     "winit",
 ]
 

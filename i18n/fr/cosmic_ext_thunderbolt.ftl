@@ -1,13 +1,13 @@
 app-title = Cosmic Ext Thunderbolt
-app-comment = A Thunderbolt™ applet for the COSMIC™ desktop
+app-comment = Une applet Thunderbolt™ pour le bureau COSMIC™
 app-keywords = Thunderbolt
-about = About
-view = View
-welcome = Welcome to COSMIC! ✨
+about = À propos
+view = Affichage
+welcome = Bienvenue sur COSMIC! ✨
 page-id = Page { $num }
-git-description = Git commit {$hash} on {$date}
+git-description = Git commit {$hash} le {$date}
 thunderbolt = Thunderbolt™
-settings = Thunderbolt™ settings...
+settings = Paramètres Thunderbolt™...
 
 # Erreurs Thunderbolt
 error-dbus-connection = Échec de connexion au bus système.
@@ -23,22 +23,22 @@ error-title-thunderbolt = Erreur Thunderbolt
 error-check-boltd-installed = Vérifiez que le paquet « boltd » est installé et que le service est actif.
 
 # Security levels
-security-level = Security Level
-security-level-unknown = Unknown
-security-level-none = None
-security-level-user = User
-security-level-secure = Secure
-security-level-dponly = DisplayPort Only
-security-level-nopcie = No PCIe
-security-level-usbonly = USB Only
+security-level = Niveau de sécurité
+security-level-unknown = Inconnu
+security-level-none = Aucun
+security-level-user = Utilisateur
+security-level-secure = Sécurisé
+security-level-dponly = Uniquement DisplayPort
+security-level-nopcie = Pas de PCIe
+security-level-usbonly = Uniquement USB
 
 # MOCK
-connected = Connected
-disconnected-devices = Disconnected Thunderbolt™ devices
-cancel = Cancel
-confirm = Confirm
+connected = Connecté
+disconnected-devices = Périphériques Thunderbolt™ déconnectés
+cancel = Annuler
+confirm = Confirmer
 
 # Icon placeholders
-error = Error
-awaiting-auth = Awaiting Auth
-authorized = Authorized
+error = Erreur
+awaiting-auth = Attente Aut
+authorized = Autorisé

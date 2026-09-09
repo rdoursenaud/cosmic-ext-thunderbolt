@@ -14,6 +14,7 @@ appdata-dst := base-dir / 'share' / 'appdata' / appdata
 bin-dst := base-dir / 'bin' / name
 desktop-dst := base-dir / 'share' / 'applications' / desktop
 icon-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '.svg'
+icon-status-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'scalable' / 'status' / 'thunderbolt-symbolic.svg'
 
 # Default recipe which runs `just build-release`
 default: build-release
@@ -56,6 +57,7 @@ install:
     install -Dm0644 {{ 'target' / 'xdgen' / 'app.desktop' }} {{desktop-dst}}
     install -Dm0644 {{ 'target' / 'xdgen' / 'app.metainfo.xml' }} {{appdata-dst}}
     install -Dm0644 resources/icon.svg {{icon-dst}}
+    install -Dm0644 {{ 'data' / 'scalable' / 'status' / 'thunderbolt-symbolic.svg' }} {{icon-status-dst}}
 
 # Uninstalls installed files
 uninstall:
@@ -83,3 +85,5 @@ tag version:
     git commit -m 'release: {{version}}'
     git tag -a {{version}} -m ''
 
+help:
+    @just --list

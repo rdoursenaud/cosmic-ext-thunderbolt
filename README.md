@@ -2,6 +2,23 @@
 
 A Thunderbolt™ applet for the COSMIC™ desktop
 
+    TODO: insert screenshot
+
+## Origins
+
+Project was initialized using the [cosmic-applet-template](https://github.com/pop-os/cosmic-applet-template) and
+the initial UI/logic iteration was heavily inspired by the official
+[cosmic-applet-bluetooth](https://github.com/pop-os/cosmic-applets/tree/master/cosmic-applet-bluetooth).
+
+Consequently, some source files retain copyright notices from System76 in accordance with the GPL-3.0-only license.
+
+## Requirements
+
+- [COSMIC™ Desktop Environment](https://system76.com/cosmic)
+- [bolt thunderbolt device manager](https://gitlab.freedesktop.org/bolt/bolt) installed
+  - `boltd` running
+- [Rust toolchain](https://rust-lang.org/tools/install/) for building from source
+
 ## Installation
 
 A [justfile](./justfile) is included by default for the [casey/just][just] command runner.
@@ -13,6 +30,15 @@ A [justfile](./justfile) is included by default for the [casey/just][just] comma
 - `just build-vendored` compiles with vendored dependencies from that tarball
 - `just check` runs clippy on the project to check for linter warnings
 - `just check-json` can be used by IDEs that support LSP
+
+## Configuration
+
+Advanced users may wish to display the Thunderbolt Host Controller in the applet list. This is hidden by default.
+
+To show it:
+1. create or edit the configuration file  
+`~/.config/cosmic/fr.doursenaud.raphael.cosmic-ext-thunderbolt/v1/show_host_device`
+2. set it to `true`
 
 ## Translators
 
