@@ -6,39 +6,57 @@ view = View
 welcome = Welcome to COSMIC! ✨
 page-id = Page { $num }
 git-description = Git commit {$hash} on {$date}
-thunderbolt = Thunderbolt™
-settings = Thunderbolt™ settings...
+thunderbolt = Thunderbolt
+settings = Thunderbolt settings...
 
-# Erreurs Thunderbolt
-error-dbus-connection = Échec de connexion au bus système.
-error-service-not-found = Le service Thunderbolt (boltd) est introuvable.
-error-proxy-creation = Impossible d'initialiser l'interface de gestion.
-error-property-read = Échec de lecture des informations de sécurité.
-error-daemon-terminated = Le service Thunderbolt s'est arrêté inopinément.
-error-generic = Une erreur inattendue est survenue : { $detail }.
+# Thunderbolt Errors
+error-dbus-connection = Failed to connect to the system bus.
+error-service-not-found = Thunderbolt service (boltd) not found.
+error-proxy-connection = Unable to initialize the management interface.
+error-property-read = Failed to read security information.
+error-daemon-terminated = The Thunderbolt service terminated unexpectedly.
+error-generic = An unexpected error occurred: { $detail }.
 
-# Titres et conseils
-error-title-service-not-found = Service Thunderbolt manquant
-error-title-thunderbolt = Erreur Thunderbolt
-error-check-boltd-installed = Vérifiez que le paquet « boltd » est installé et que le service est actif.
+# Titles and Tips
+error-title-service-not-found = Thunderbolt Service Missing
+error-title-thunderbolt = Thunderbolt Error
+error-check-boltd-installed = Ensure the "boltd" package is installed and the service is active.
 
 # Security levels
 security-level = Security Level
+security-level-warning = Warning: insuffisient security level
 security-level-unknown = Unknown
 security-level-none = None
 security-level-user = User
 security-level-secure = Secure
-security-level-dponly = DisplayPort Only
-security-level-nopcie = No PCIe
+security-level-dponly = DisplayPort and USB Only
+security-level-nopcie = PCIe tunneling disabled
 security-level-usbonly = USB Only
 
 # MOCK
 connected = Connected
-disconnected-devices = Disconnected Thunderbolt™ devices
+disconnected-devices = Disconnected Thunderbolt devices
 cancel = Cancel
 confirm = Confirm
 
 # Icon placeholders
 error = Error
-awaiting-auth = Awaiting Auth
+awaiting-auth = Authorization Pending
 authorized = Authorized
+
+# Authflags
+auth-flag-none = Standard Authorization
+auth-flag-secure = Hardware Protected
+auth-flag-boot = Boot Authorized
+auth-flag-nokey = Secure Key Not Supported
+auth-flag-nopcie = PCIe Tunneling Disabled
+
+# Statuses
+status-unknown = Unknown
+status-connecting = Connecting...
+status-connected = Connected
+status-authorizing = Authorizing...
+auth-error = Authorization Failed
+status-authorized = Authorized
+status-pending-removal = Pending Removal...
+status-disconnected = Disconnected

@@ -16,4 +16,8 @@ fn main() {
     fs::create_dir_all(output).unwrap();
     fs::write(output.join("app.desktop"), desktop_entry).unwrap();
     fs::write(output.join("app.metainfo.xml"), metainfo).unwrap();
+
+    // TODO: generate bolt_proxy.rs from bolt D-Bus XML using zbus_xmlgen
+    //       Potential YAGNI, wait for use-case before implementing
+    //       Don't forget to Inject `#![allow(clippy::pedantic)]` at the top of the file
 }

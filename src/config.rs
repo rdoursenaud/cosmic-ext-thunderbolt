@@ -9,4 +9,5 @@ use serde::{Deserialize, Serialize};
 #[version = 1]
 pub struct ThunderboltAppletConfig {
     pub show_host_device: bool,
+    pub show_security_level: bool,
 }

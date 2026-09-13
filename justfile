@@ -37,6 +37,9 @@ build-debug *args:
 # Compiles with release profile
 build-release *args: (build-debug '--release' args)
 
+# Compiles with mocking support
+build-mock *args: (build-release '--features mock' args)
+
 # Compiles release profile with vendored dependencies
 build-vendored *args: vendor-extract (build-release '--frozen --offline' args)
 
@@ -50,6 +53,10 @@ check-json: (check '--message-format=json')
 # Run the application for testing purposes
 run *args:
     env RUST_BACKTRACE=full cargo run --release {{args}}
+
+# Run the application for testing purposes with mocked data
+export COSMIC_TB_MOCK := "1"
+run-mock *args: (run '--features mock' args)
 
 # Installs files
 install:

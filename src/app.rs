@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::thunderbolt::{
-    BoltCommand, BoltDevice, BoltError, BoltEvent, BoltGeneration, BoltSecurityLevel, BoltState,
+    BoltCommand, BoltDevice, BoltDeviceType, BoltError, BoltEvent, BoltGeneration, BoltState,
     BoltStatus, bolt_subscription,
 };
+use crate::ui_types::{BoltDeviceUiExt, format_security_level, security_level_is_problematic};
 use crate::{config, fl};
+use cosmic::applet::cosmic_panel_config::PanelAnchor;
+use cosmic::surface::action::LiveSettings;
 use cosmic::{
     Element, Task, app,
     applet::{
@@ -65,8 +68,8 @@ struct CosmicExtThunderboltApplet {
 }
 
 impl CosmicExtThunderboltApplet {
-    /// Formats a user-friendly error title and message based on the BoltError type.
-    fn format_error(&self, err: &BoltError) -> (String, String) {
+    /// Formats a user-friendly error title and message based on the `BoltError` type.
+    fn format_error(err: &BoltError) -> (String, String) {
         let title = match err {
             BoltError::ServiceNotFound => fl!("error-title-service-not-found"),
             _ => fl!("error-title-thunderbolt"),
@@ -75,10 +78,13 @@ impl CosmicExtThunderboltApplet {
         let message = match err {
             BoltError::DbusConnectionFailed => fl!("error-dbus-connection"),
             BoltError::ServiceNotFound => fl!("error-service-not-found"),
-            BoltError::ProxyCreationFailed => fl!("error-proxy-creation"),
+            BoltError::ProxyConnectionFailed => fl!("error-proxy-connection"),
             BoltError::PropertyReadFailed => fl!("error-property-read"),
             BoltError::DaemonTerminated => fl!("error-daemon-terminated"),
             BoltError::GenericError { detail } => fl!("error-generic", detail = detail.as_str()),
+            &BoltError::InvalidDestination
+            | &BoltError::InvalidObjectPath
+            | &BoltError::SignalSubscriptionFailed => todo!(),
         };
 
         (title, message)
@@ -95,7 +101,7 @@ impl CosmicExtThunderboltApplet {
         .to_string();
     }
 
-    /// Rebuilds the categorized device lists from the raw bolt_state.
+    /// Rebuilds the categorized device lists from the raw `bolt_state`.
     ///
     /// This ensures the UI reflects the current D-Bus state accurately.
     /// Host devices are filtered out by default unless explicitly configured.
@@ -105,7 +111,7 @@ impl CosmicExtThunderboltApplet {
         self.authorized_devices.clear();
         self.disconnected_devices.clear();
 
-        for dev in self.bolt_state.devices.iter() {
+        for dev in &self.bolt_state.devices {
             if dev.device_type == crate::thunderbolt::BoltDeviceType::Host {
                 if self.config.show_host_device {
                     self.host_devices.push(dev.clone());
@@ -132,28 +138,25 @@ impl CosmicExtThunderboltApplet {
     }
 
     /// Constructs the UI row for a single Thunderbolt™ device.
-    fn build_device_row<'a>(
-        &'a self,
-        dev: &'a BoltDevice,
-        action_msg: Message,
-    ) -> Element<'a, Message> {
+    fn build_device_row(dev: &BoltDevice, action_msg: Message) -> Element<'_, Message> {
         let Spacing { .. } = theme::active().cosmic().spacing;
 
-        let version_number = if dev.generation != BoltGeneration::Unknown {
-            Some(dev.generation.to_string())
-        } else {
+        let version_number = if dev.generation == BoltGeneration::Unknown {
             None
+        } else {
+            Some(dev.ui_generation_text())
         };
 
         let icon_column = if let Some(ver) = version_number {
             column![
-                icon::from_name(dev.icon).size(24).symbolic(true),
+                icon::from_name(dev.ui_icon_name()).size(24).symbolic(true),
                 text::caption(ver).size(10).align_x(Alignment::Center)
             ]
             .align_x(Alignment::Center)
             .spacing(2)
         } else {
-            column![icon::from_name(dev.icon).size(24).symbolic(true)].align_x(Alignment::Center)
+            column![icon::from_name(dev.ui_icon_name()).size(24).symbolic(true)]
+                .align_x(Alignment::Center)
         };
 
         let vendor_widget = if let Some(ref v) = dev.vendor {
@@ -163,43 +166,83 @@ impl CosmicExtThunderboltApplet {
         };
 
         let info_column = column![
-            text::body(dev.display_name()).align_x(Alignment::Start),
+            text::body(dev.ui_display_label()).align_x(Alignment::Start),
             vendor_widget
         ]
         .align_x(Alignment::Start)
         .width(Length::Fill)
         .spacing(2);
 
-        let mut row = row![icon_column, info_column]
-            .align_y(Alignment::Center)
-            .spacing(12);
-
         let status_widget: Element<Message> = match &dev.status {
-            BoltStatus::Unknown | BoltStatus::AuthError => text::body(fl!("error")).into(),
+            BoltStatus::Unknown | BoltStatus::AuthError => {
+                icon::from_name("emblem-important-symbolic")
+                    .size(24)
+                    .symbolic(true)
+                    .into()
+            }
             BoltStatus::Connecting | BoltStatus::Authorizing => {
                 indeterminate_circular().size(24.0).into()
             }
-            BoltStatus::Connected => text::body(fl!("awaiting-auth")).into(),
-            BoltStatus::Authorized => text::body(fl!("authorized")).into(),
-            BoltStatus::Disconnected => text::body(fl!("authorized")).into(),
+            BoltStatus::Connected => {
+                let dot = container(
+                    space::vertical()
+                        .width(Length::Fixed(0.0))
+                        .height(Length::Fixed(0.0)),
+                )
+                .padding(4)
+                .class(cosmic::style::Container::Custom(Box::new(|theme| {
+                    container::Style {
+                        text_color: Some(Color::TRANSPARENT),
+                        background: Some(Background::Color(theme.cosmic().accent_color().into())),
+                        border: Border {
+                            radius: 4.0.into(),
+                            width: 0.0,
+                            color: Color::TRANSPARENT,
+                        },
+                        shadow: Shadow::default(),
+                        icon_color: Some(Color::TRANSPARENT),
+                        snap: true,
+                    }
+                })));
+
+                dot.align_y(Alignment::Center).into()
+            }
+            BoltStatus::Authorized | BoltStatus::Disconnected => {
+                if dev.device_type == BoltDeviceType::Host {
+                    icon::from_name("computer-symbolic")
+                        .size(24)
+                        .symbolic(true)
+                        .into()
+                } else {
+                    icon::from_name("emblem-ok-symbolic")
+                        .size(24)
+                        .symbolic(true)
+                        .into()
+                }
+            }
         };
 
-        row = row.push(status_widget);
+        let row = row![icon_column, info_column, status_widget]
+            .align_y(Alignment::Center)
+            .spacing(12);
 
-        menu_button(row).on_press(action_msg).into()
+        if dev.device_type == BoltDeviceType::Host {
+            menu_button(row).into()
+        } else {
+            menu_button(row).on_press(action_msg).into()
+        }
     }
 
     /// Builds a scrollable section containing a list of devices.
     fn build_device_list_section<'a>(
-        &'a self,
         devices: &'a [BoltDevice],
-        _header_key: &str,
+        _header_key: &'a str,
         action_fn: impl Fn(&BoltDevice) -> Message,
     ) -> Element<'a, Message> {
         let mut column = column![];
 
         for dev in devices {
-            let row_element = self.build_device_row(dev, action_fn(dev));
+            let row_element = CosmicExtThunderboltApplet::build_device_row(dev, action_fn(dev));
             column = column.push(row_element);
         }
 
@@ -214,6 +257,233 @@ impl CosmicExtThunderboltApplet {
                 BoltStatus::Unknown | BoltStatus::Connected | BoltStatus::AuthError
             )
         })
+    }
+
+    // --- Update Helpers ---
+
+    fn handle_toggle_popup(&mut self) -> app::Task<Message> {
+        if let Some(p) = self.popup.take() {
+            Task::batch([destroy_popup(p)])
+        } else {
+            let get_popup_task = cosmic::surface::surface_task(cosmic::surface::action::app_popup(
+                |_| LiveSettings::default(),
+                move |app: &mut Self| {
+                    let new_id = window::Id::unique();
+                    app.popup.replace(new_id);
+                    app.core.applet.get_popup_settings(
+                        app.core.main_window_id().unwrap(),
+                        new_id,
+                        None,
+                        None,
+                        None,
+                    )
+                },
+                None,
+            ));
+
+            Task::batch([get_popup_task])
+        }
+    }
+
+    fn handle_thunderbolt_event(&mut self, event: BoltEvent) {
+        match event {
+            BoltEvent::Error(err) => {
+                self.error_state = Some(err);
+                self.bolt_sender = None;
+                self.host_devices.clear();
+                self.available_devices.clear();
+                self.authorized_devices.clear();
+                self.disconnected_devices.clear();
+                self.update_icon();
+            }
+            BoltEvent::Init { sender, state } => {
+                self.error_state = None;
+                self.bolt_sender.replace(sender);
+                self.bolt_state = state;
+                self.refresh_devices_lists();
+                self.update_icon();
+            }
+            BoltEvent::DevicesChanged { state } => {
+                self.error_state = None;
+                self.bolt_state = state;
+
+                // Debug logging to trace state synchronization between D-Bus and UI
+                for dev in &self.bolt_state.devices {
+                    tracing::debug!(
+                        "UI SYNC: Device {} -> Status: {:?}",
+                        dev.uid.as_str(),
+                        dev.status
+                    );
+                }
+
+                self.refresh_devices_lists();
+                self.update_icon();
+            }
+            BoltEvent::Finished => {
+                // The D-Bus subscription stream has ended. Since the applet relies entirely
+                // on `boltd`, a clean restart is not possible without the daemon.
+                // Exiting allows the shell to potentially restart the applet later.
+                // TODO: Evaluate if a graceful restart mechanism should be implemented instead of exit.
+                eprintln!("thunderbolt subscription finished. exiting...");
+                std::process::exit(0);
+            }
+        }
+    }
+
+    fn handle_request(&mut self, r: BoltCommand) {
+        // Optimistically update the UI state before the daemon confirms the action.
+        // This provides immediate visual feedback to the user.
+        match &r {
+            BoltCommand::AuthorizeDevice(uid) => {
+                if let Some(d) = self.bolt_state.devices.iter_mut().find(|d| d.uid == *uid) {
+                    d.status = BoltStatus::Authorizing;
+                }
+            }
+            BoltCommand::EnrollDevice(uid) => {
+                if let Some(d) = self.bolt_state.devices.iter_mut().find(|d| d.uid == *uid) {
+                    d.status = BoltStatus::Authorizing;
+                }
+            }
+            BoltCommand::ForgetDevice(uid) => {
+                if let Some(d) = self.bolt_state.devices.iter_mut().find(|d| d.uid == *uid) {
+                    d.stored = false;
+                }
+            }
+            BoltCommand::SetDeviceLabel { uid: _, label: _ } => {
+                // TODO: Implement device labeling support
+                todo!("SetDeviceLabel is not implemented yet");
+            }
+        }
+
+        // Update optimistic UI state
+        self.refresh_devices_lists();
+
+        // Send the command to the background worker via the channel.
+        // We clone the sender to avoid borrowing issues in the async block.
+        if let Some(tx) = self.bolt_sender.clone() {
+            tokio::spawn(async move {
+                let _ = tx.send(r).await;
+            });
+        }
+    }
+
+    fn handle_token_update(&mut self, u: TokenUpdate) {
+        match u {
+            TokenUpdate::Init(tx) => {
+                self.token_tx = Some(tx);
+            }
+            TokenUpdate::Finished => {
+                self.token_tx = None;
+            }
+            TokenUpdate::ActivationToken { token, .. } => {
+                // Launch the settings application with the activation token
+                // to ensure proper window focusing on Wayland.
+                let mut cmd = std::process::Command::new("cosmic-settings");
+                cmd.arg("thunderbolt");
+                if let Some(token) = token {
+                    cmd.env("XDG_ACTIVATION_TOKEN", &token);
+                    cmd.env("DESKTOP_STARTUP_ID", &token);
+                }
+                tokio::spawn(cosmic::process::spawn(cmd));
+            }
+        }
+    }
+
+    // --- View Helpers ---
+
+    fn view_error_state(&self) -> Element<'_, Message> {
+        let err = self.error_state.as_ref().unwrap();
+        let (title, message) = CosmicExtThunderboltApplet::format_error(err);
+
+        let content = column![
+            padded_control(
+                row![
+                    icon::from_name("dialog-error-symbolic")
+                        .size(32)
+                        .symbolic(true),
+                    column![text::title3(title), text::body(message)].spacing(8)
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center)
+            ),
+            padded_control(text::caption(fl!("error-check-boltd-installed")))
+        ]
+        .align_x(Alignment::Center)
+        .padding(20);
+
+        self.core.applet.popup_container(content).into()
+    }
+
+    fn view_active_devices(&self) -> Element<'_, Message> {
+        let mut active_column = column![];
+
+        // List already authorized devices (no action needed).
+        for dev in &self.authorized_devices {
+            let row_element: Element<Message>;
+            if dev.stored {
+                row_element = CosmicExtThunderboltApplet::build_device_row(
+                    dev,
+                    Message::Request(BoltCommand::ForgetDevice(dev.uid.clone())),
+                );
+            } else {
+                row_element = CosmicExtThunderboltApplet::build_device_row(dev, Message::Ignore);
+            }
+            active_column = active_column.push(row_element);
+        }
+
+        // List devices awaiting authorization/enrollment.
+        for dev in &self.available_devices {
+            let row_element = CosmicExtThunderboltApplet::build_device_row(
+                dev,
+                Message::Request(BoltCommand::EnrollDevice(dev.uid.clone())),
+            );
+            active_column = active_column.push(row_element);
+        }
+
+        column![active_column].into()
+    }
+
+    fn view_disconnected_devices(&self) -> Element<'_, Message> {
+        let dropdown_icon = if self.show_disconnected_devices {
+            "go-up-symbolic"
+        } else {
+            "go-down-symbolic"
+        };
+
+        let disconnected_devices_btn = menu_button(row![
+            text::body(fl!("disconnected-devices"))
+                .width(Length::Fill)
+                .height(Length::Fixed(24.0))
+                .align_y(Alignment::Center),
+            container(icon::from_name(dropdown_icon).size(16).symbolic(true))
+                .center(Length::Fixed(24.0))
+        ])
+        .on_press(Message::ToggleDisconnectedDevices(
+            !self.show_disconnected_devices,
+        ));
+
+        let mut content = column![disconnected_devices_btn];
+
+        if self.show_disconnected_devices && !self.disconnected_devices.is_empty() {
+            let list_content = CosmicExtThunderboltApplet::build_device_list_section(
+                &self.disconnected_devices,
+                "disconnected-header",
+                |dev| Message::Request(BoltCommand::ForgetDevice(dev.uid.clone())),
+            );
+
+            // Limit the height of the list if there are many devices to avoid
+            // overflowing the screen.
+            // FIXME: add length to the config?
+            // FIXME: compute the height dynamically according to monitor height?
+            if self.disconnected_devices.len() > MAX_DEVICES_VISIBLE {
+                content = content
+                    .push(scrollable(list_content).height(Length::Fixed(SCROLLABLE_LIST_HEIGHT)));
+            } else {
+                content = content.push(list_content);
+            }
+        }
+
+        column![content].into()
     }
 }
 
@@ -280,111 +550,17 @@ impl cosmic::Application for CosmicExtThunderboltApplet {
                 self.refresh_devices_lists();
             }
             Message::TogglePopup => {
-                return if let Some(p) = self.popup.take() {
-                    Task::batch([destroy_popup(p)])
-                } else {
-                    let get_popup_task =
-                        cosmic::surface::surface_task(cosmic::surface::action::app_popup(
-                            |_| Default::default(),
-                            move |app: &mut Self| {
-                                let new_id = window::Id::unique();
-                                app.popup.replace(new_id);
-                                app.core.applet.get_popup_settings(
-                                    app.core.main_window_id().unwrap(),
-                                    new_id,
-                                    None,
-                                    None,
-                                    None,
-                                )
-                            },
-                            None,
-                        ));
-
-                    Task::batch([get_popup_task])
-                };
+                return self.handle_toggle_popup();
             }
             Message::Ignore => {}
             Message::ToggleDisconnectedDevices(enabled) => {
                 self.show_disconnected_devices = enabled;
             }
-            Message::ThunderboltEvent(e) => match e {
-                BoltEvent::Error(err) => {
-                    self.error_state = Some(err);
-                    self.bolt_sender = None;
-                    self.host_devices.clear();
-                    self.available_devices.clear();
-                    self.authorized_devices.clear();
-                    self.disconnected_devices.clear();
-                    self.update_icon();
-                }
-                BoltEvent::Init { sender, state } => {
-                    self.error_state = None;
-                    self.bolt_sender.replace(sender);
-                    self.bolt_state = state;
-                    self.refresh_devices_lists();
-                    self.update_icon();
-                }
-                BoltEvent::DevicesChanged { state } => {
-                    self.error_state = None;
-                    self.bolt_state = state;
-
-                    // Debug logging to trace state synchronization between D-Bus and UI
-                    for dev in &self.bolt_state.devices {
-                        tracing::debug!(
-                            "UI SYNC: Device {} -> Status: {:?}",
-                            dev.uid.as_str(),
-                            dev.status
-                        );
-                    }
-
-                    self.refresh_devices_lists();
-                    self.update_icon();
-                }
-                BoltEvent::Finished => {
-                    // The D-Bus subscription stream has ended. Since the applet relies entirely
-                    // on `boltd`, a clean restart is not possible without the daemon.
-                    // Exiting allows the shell to potentially restart the applet later.
-                    // TODO: Evaluate if a graceful restart mechanism should be implemented instead of exit.
-                    eprintln!("thunderbolt subscription finished. exiting...");
-                    std::process::exit(0);
-                }
-            },
+            Message::ThunderboltEvent(e) => {
+                self.handle_thunderbolt_event(e);
+            }
             Message::Request(r) => {
-                // Optimistically update the UI state before the daemon confirms the action.
-                // This provides immediate visual feedback to the user.
-                match &r {
-                    BoltCommand::AuthorizeDevice(add) => {
-                        if let Some(d) = self.bolt_state.devices.iter_mut().find(|d| d.uid == *add)
-                        {
-                            d.status = BoltStatus::Authorizing;
-                        }
-                    }
-
-                    BoltCommand::EnrollDevice(add) => {
-                        if let Some(d) = self.bolt_state.devices.iter_mut().find(|d| d.uid == *add)
-                        {
-                            d.status = BoltStatus::Authorizing;
-                        }
-                    }
-                    BoltCommand::ForgetDevice(add) => {
-                        if let Some(d) = self.bolt_state.devices.iter_mut().find(|d| d.uid == *add)
-                        {
-                            d.status = BoltStatus::Disconnected;
-                        }
-                    }
-                    BoltCommand::SetDeviceLabel { uid: _, label: _ } => {
-                        // TODO: Implement device labeling support
-                        todo!("SetDeviceLabel is not implemented yet");
-                    }
-                }
-
-                // Send the command to the background worker via the channel.
-                // We clone the sender to avoid borrowing issues in the async block.
-                if let Some(tx) = self.bolt_sender.clone() {
-                    tokio::spawn(async move {
-                        let _ = tx.send(r).await;
-                    });
-                }
+                self.handle_request(r);
             }
             Message::CloseRequested(id) => {
                 if Some(id) == self.popup {
@@ -400,25 +576,9 @@ impl cosmic::Application for CosmicExtThunderboltApplet {
                     });
                 }
             }
-            Message::Token(u) => match u {
-                TokenUpdate::Init(tx) => {
-                    self.token_tx = Some(tx);
-                }
-                TokenUpdate::Finished => {
-                    self.token_tx = None;
-                }
-                TokenUpdate::ActivationToken { token, .. } => {
-                    // Launch the settings application with the activation token
-                    // to ensure proper window focusing on Wayland.
-                    let mut cmd = std::process::Command::new("cosmic-settings");
-                    cmd.arg("thunderbolt");
-                    if let Some(token) = token {
-                        cmd.env("XDG_ACTIVATION_TOKEN", &token);
-                        cmd.env("DESKTOP_STARTUP_ID", &token);
-                    }
-                    tokio::spawn(cosmic::process::spawn(cmd));
-                }
-            },
+            Message::Token(u) => {
+                self.handle_token_update(u);
+            }
         }
 
         // Ensure the icon reflects the latest state after any message processing.
@@ -456,18 +616,10 @@ impl cosmic::Application for CosmicExtThunderboltApplet {
             // Calculate dot alignment based on the panel's position to ensure
             // the dot remains visible outside the icon bounds.
             let (dot_align_x, dot_align_y) = match self.core.applet.anchor {
-                cosmic::applet::cosmic_panel_config::PanelAnchor::Left => {
-                    (Alignment::Start, Alignment::Center)
-                }
-                cosmic::applet::cosmic_panel_config::PanelAnchor::Right => {
-                    (Alignment::End, Alignment::Center)
-                }
-                cosmic::applet::cosmic_panel_config::PanelAnchor::Top => {
-                    (Alignment::Center, Alignment::Start)
-                }
-                cosmic::applet::cosmic_panel_config::PanelAnchor::Bottom => {
-                    (Alignment::Center, Alignment::End)
-                }
+                PanelAnchor::Left => (Alignment::Start, Alignment::Center),
+                PanelAnchor::Right => (Alignment::End, Alignment::Center),
+                PanelAnchor::Top => (Alignment::Center, Alignment::Start),
+                PanelAnchor::Bottom => (Alignment::Center, Alignment::End),
             };
 
             let dot_container = container(dot)
@@ -489,134 +641,71 @@ impl cosmic::Application for CosmicExtThunderboltApplet {
         } = theme::active().cosmic().spacing;
 
         // If an error state exists, display the error view immediately.
-        if let Some(err) = &self.error_state {
-            let (title, message) = self.format_error(err);
-
-            let content = column![
-                padded_control(
-                    row![
-                        icon::from_name("dialog-error-symbolic")
-                            .size(32)
-                            .symbolic(true),
-                        column![text::title3(title), text::body(message)].spacing(8)
-                    ]
-                    .spacing(12)
-                    .align_y(Alignment::Center)
-                ),
-                padded_control(text::caption(fl!("error-check-boltd-installed")))
-            ]
-            .align_x(Alignment::Center)
-            .padding(20);
-
-            return self.core.applet.popup_container(content).into();
+        if let Some(_err) = &self.error_state {
+            return self.view_error_state();
         }
 
-        let security_label = match self.bolt_state.security_level {
-            BoltSecurityLevel::None => fl!("security-level-none"),
-            BoltSecurityLevel::User => fl!("security-level-user"),
-            BoltSecurityLevel::Secure => fl!("security-level-secure"),
-            BoltSecurityLevel::DpOnly => fl!("security-level-dponly"),
-            BoltSecurityLevel::UsbOnly => fl!("security-level-usbonly"),
-            BoltSecurityLevel::NoPcie => fl!("security-level-nopcie"),
-            BoltSecurityLevel::Unknown => fl!("security-level-unknown"),
-        };
+        let mut content = column![];
 
-        let mut content = column![padded_control(
-            row![
-                text::body(fl!("security-level")).width(Length::Fill),
-                text::caption(security_label)
-            ]
-            .align_y(Alignment::Center)
-            .spacing(12)
-        )]
-        .align_x(Alignment::Center)
-        .padding([8, 0]);
+        let security_label = format_security_level(self.bolt_state.security_level);
+
+        if security_level_is_problematic(self.bolt_state.security_level) {
+            content = content.push(padded_control(
+                row![
+                    icon::from_name("dialog-warning-symbolic")
+                        .size(24)
+                        .symbolic(true),
+                    column![
+                        text::body(fl!("security-level-warning")),
+                        //text::caption(security_label),
+                    ]
+                    .spacing(4)
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center),
+            ));
+
+            //return self.core.applet.popup_container(content).into();
+        }
 
         // Display host controllers if configured to do so.
         if !self.host_devices.is_empty() {
-            content = content
-                .push(padded_control(divider::horizontal::default()).padding([space_xxs, space_s]));
-
             for dev in &self.host_devices {
-                let row_element = self.build_device_row(dev, Message::Ignore);
+                let row_element =
+                    CosmicExtThunderboltApplet::build_device_row(dev, Message::Ignore);
                 content = content.push(row_element);
             }
+        }
+
+        if self.config.show_security_level {
+            content = content
+                .push(padded_control(
+                    row![
+                        text::body(fl!("security-level")).width(Length::Fill),
+                        text::caption(security_label),
+                    ]
+                    .align_y(Alignment::Center)
+                    .spacing(12),
+                ))
+                .align_x(Alignment::Center)
+                .padding([8, 0]);
+        }
+
+        if self.config.show_host_device || self.config.show_security_level {
+            content = content
+                .push(padded_control(divider::horizontal::default()).padding([space_xxs, space_s]));
         }
 
         let has_active_devices =
             !self.authorized_devices.is_empty() || !self.available_devices.is_empty();
 
         if has_active_devices {
-            content = content
-                .push(padded_control(divider::horizontal::default()).padding([space_xxs, space_s]));
-
-            let mut active_column = column![];
-
-            // List already authorized devices (no action needed).
-            for dev in &self.authorized_devices {
-                let row_element = self.build_device_row(
-                    dev,
-                    Message::Request(BoltCommand::ForgetDevice(dev.uid.clone())),
-                );
-                active_column = active_column.push(row_element);
-            }
-
-            // List devices awaiting authorization/enrollment.
-            for dev in &self.available_devices {
-                let row_element = self.build_device_row(
-                    dev,
-                    Message::Request(BoltCommand::EnrollDevice(dev.uid.clone())),
-                );
-                active_column = active_column.push(row_element);
-            }
-
-            content = content.push(active_column);
+            content = content.push(self.view_active_devices());
         }
 
         // Handle disconnected devices section with a collapsible dropdown.
         if !self.disconnected_devices.is_empty() {
-            content = content
-                .push(padded_control(divider::horizontal::default()).padding([space_xxs, space_s]));
-
-            let dropdown_icon = if self.show_disconnected_devices {
-                "go-up-symbolic"
-            } else {
-                "go-down-symbolic"
-            };
-
-            let disconnected_devices_btn = menu_button(row![
-                text::body(fl!("disconnected-devices"))
-                    .width(Length::Fill)
-                    .height(Length::Fixed(24.0))
-                    .align_y(Alignment::Center),
-                container(icon::from_name(dropdown_icon).size(16).symbolic(true))
-                    .center(Length::Fixed(24.0))
-            ])
-            .on_press(Message::ToggleDisconnectedDevices(
-                !self.show_disconnected_devices,
-            ));
-
-            content = content.push(disconnected_devices_btn);
-
-            if self.show_disconnected_devices && !self.disconnected_devices.is_empty() {
-                let list_content = self.build_device_list_section(
-                    &self.disconnected_devices,
-                    "disconnected-header",
-                    |dev| Message::Request(BoltCommand::ForgetDevice(dev.uid.clone())),
-                );
-
-                // Limit the height of the list if there are many devices to avoid
-                // overflowing the screen.
-                // FIXME: add length to the config?
-                // FIXME: compute the height dynamically according to monitor height?
-                if self.disconnected_devices.len() > MAX_DEVICES_VISIBLE {
-                    content = content.push(
-                        scrollable(list_content).height(Length::Fixed(SCROLLABLE_LIST_HEIGHT)),
-                    );
-                } else {
-                    content = content.push(list_content);
-                }
-            }
+            content = content.push(self.view_disconnected_devices());
         }
 
         // Add the settings button at the bottom of the popup.

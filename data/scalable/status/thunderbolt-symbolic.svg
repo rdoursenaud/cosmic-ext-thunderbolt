@@ -5,7 +5,7 @@
    viewBox="0 0 16 16"
    version="1.1"
    id="svg1"
-   sodipodi:docname="thunderbolt.svg"
+   sodipodi:docname="thunderbolt-symbolic.svg"
    inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -23,7 +23,7 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="37.5"
-     inkscape:cx="7.9866667"
+     inkscape:cx="8"
      inkscape:cy="8"
      inkscape:window-width="1920"
      inkscape:window-height="1011"
@@ -32,9 +32,7 @@
      inkscape:window-maximized="1"
      inkscape:current-layer="svg1" />
   <path
-     d="M 11.609375,2.007812"
-     id="path4" />
-  <path
-     d="M 7.546875,0 4.5,8 H 8.214844 L 6.410156,11.613281 5.398438,10.410156 5.046875,16 9.378906,12.414062 7.707031,12.242188 12.046875,6 H 8.351562 l 3.195313,-6 z"
-     id="path1" />
+     d="M 7.546875,0 4.5,8 H 8.2148438 L 6.4101562,11.613281 5.3984375,10.410156 5.046875,16 9.3789063,12.414063 7.7070312,12.242188 12.046875,6 H 8.3515625 L 11.546875,0 Z"
+     style="fill:#2e3434"
+     id="path2" />
 </svg>

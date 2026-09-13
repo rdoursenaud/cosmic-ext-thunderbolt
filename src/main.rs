@@ -7,7 +7,9 @@ mod bolt_dbus;
 mod bolt_proxy;
 mod config;
 mod i18n;
+mod mock_bolt_dbus;
 mod thunderbolt;
+mod ui_types;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
